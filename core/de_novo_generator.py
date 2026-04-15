@@ -115,7 +115,7 @@ SCAFFOLDS = {
         ),
     ],
     
-    "gpc_receptor": [
+    "gpcr": [
         Fragment(
             name="Peptidomimetic core",
             scaffold="NC(=O)C(C)NC(=O)C(C)NC(=O)C",
@@ -518,7 +518,7 @@ class DeNovoGenerator:
         ideal_ranges = {
             "kinase": {"mw": (300, 600), "logp": (2, 5), "tpsa": (60, 120)},
             "nuclear_receptor": {"mw": (300, 700), "logp": (3, 6), "tpsa": (40, 100)},
-            "gpc_receptor": {"mw": (200, 500), "logp": (1, 4), "tpsa": (80, 150)},
+            "gpcr": {"mw": (200, 500), "logp": (1, 4), "tpsa": (80, 150)},
             "enzyme": {"mw": (200, 600), "logp": (1, 5), "tpsa": (50, 130)},
             "default": {"mw": (200, 600), "logp": (1, 5), "tpsa": (40, 140)},
         }

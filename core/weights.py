@@ -371,7 +371,7 @@ TARGET_CLASS_MODALITY: Dict[str, Dict[str, float]] = {
         "small_molecule": 0.95,
         "peptide": 0.30,
     },
-    "gpc_receptor": {
+    "gpcr": {
         "small_molecule": 0.85,
         "peptide": 0.75,
         "biologic": 0.60,

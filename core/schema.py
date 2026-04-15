@@ -31,13 +31,19 @@ class ModalityType(Enum):
 class TargetClass(Enum):
     KINASE = "kinase"
     NUCLEAR_RECEPTOR = "nuclear_receptor"
-    GPCR = "gpc_receptor"
+    GPCR = "gpcr"  # Fixed: was "gpc_receptor" (typo)
     TRANSPORTER = "transporter"
     ENZYME = "enzyme"
     TRANSCRIPTION_FACTOR = "transcription_factor"
     EXTRACELLULAR_LIGAND = "extracellular_ligand"
     ION_CHANNEL = "ion_channel"
     CELL_SURFACE_ANTIGEN = "cell_surface_antigen"
+
+
+# Backward compatibility alias for the typo value
+TARGET_CLASS_ALIASES = {
+    "gpc_receptor": "gpcr",  # Fix typo
+}
 
 
 class Status(Enum):

@@ -125,7 +125,7 @@ class ModalityRouter:
                 "peptide": 0.25,
                 "biologic": 0.20,
             },
-            "gpc_receptor": {
+            "gpcr": {
                 "small_molecule": 0.80,
                 "peptide": 0.90,
                 "biologic": 0.70,

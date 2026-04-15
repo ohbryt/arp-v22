@@ -28,6 +28,7 @@ class CandidateCompound:
     target_name: str = ""
     binding_mode: str = "unknown"  # agonist, antagonist, inhibitor, etc.
     affinity: Optional[float] = None  # Kd/Ki/IC50 in nM
+    modality_fit_score: float = 1.0  # 0-1, how well this matches preferred modality
     
     # ADMET (0-1 scores)
     admet_score: float = 0.50
@@ -65,14 +66,19 @@ class CandidateCompound:
     
     def calculate_scores(self):
         """Calculate composite scores"""
-        # ADMET composite
-        self.admet_composite = (
+        # ADMET composite: blend of explicit admet_score and component average
+        admet_components = (
             self.absorption_score * 0.20 +
             self.distribution_score * 0.15 +
             self.metabolism_score * 0.20 +
             self.excretion_score * 0.10 +
             self.safety_score * 0.35
         )
+        # If admet_score was explicitly set (not default), blend it
+        if self.admet_score != 0.50:  # Not default value
+            self.admet_composite = (admet_components * 0.7 + self.admet_score * 0.3)
+        else:
+            self.admet_composite = admet_components
         
         # Developability
         developability = (
@@ -323,13 +329,17 @@ class CandidateEngine:
                 compound_id=f"{gene_name}_{i+1}",
                 gene_name=gene_name,
                 disease=disease,
+                modality_hint=modality,  # Pass preferred modality for fit scoring
                 **compound_data
             )
             candidates.append(compound)
         
-        # Sort by composite score
+        # Sort by composite score with modality fit adjustment
         for c in candidates:
             c.calculate_scores()
+            # Apply modality fit penalty if it doesn't match preferred modality
+            # This ensures Engine 2 routing is respected
+            c.composite_score *= c.modality_fit_score
         
         candidates.sort(key=lambda x: x.composite_score, reverse=True)
         
@@ -355,22 +365,41 @@ class CandidateEngine:
         stage: str = "preclinical",
         affinity: float = None,
         source: str = "literature",
+        modality_hint: str = None,
     ) -> CandidateCompound:
-        """Create a candidate compound from data"""
+        """
+        Create a candidate compound from data.
+        
+        Args:
+            modality_hint: Preferred modality from Engine 2 routing.
+                          If provided, modality_fit will be calculated.
+        """
         # Default scores based on stage and disease
         base_scores = self._get_base_scores(stage)
+        
+        # Determine modality: smiles-based heuristic, but allow override
+        # Note: In production, this should come from actual compound metadata
+        actual_modality = "small_molecule" if smiles else "biologic"
         
         compound = CandidateCompound(
             compound_id=compound_id,
             name=name,
             smiles=smiles,
-            modality="small_molecule" if smiles else "biologic",
+            modality=actual_modality,
             source=source,
             development_stage=stage,
             target_name=gene_name,
             affinity=affinity,
             **base_scores
         )
+        
+        # Calculate modality fit if hint provided
+        if modality_hint:
+            compound.modality_fit_score = self._calculate_modality_fit(
+                actual_modality, modality_hint
+            )
+        else:
+            compound.modality_fit_score = 1.0  # No penalty if no hint
         
         # Set approved indications if applicable
         if stage == "approved":
@@ -482,6 +511,44 @@ class CandidateEngine:
         }
         
         return stage_scores.get(stage, stage_scores["discovery"])
+    
+    def _calculate_modality_fit(
+        self,
+        actual_modality: str,
+        preferred_modality: str,
+    ) -> float:
+        """
+        Calculate how well a compound's modality fits the preferred modality.
+        
+        Args:
+            actual_modality: The compound's actual modality (small_molecule, biologic, etc.)
+            preferred_modality: The modality recommended by Engine 2
+            
+        Returns:
+            0-1 score where 1 = perfect match, 0 = complete mismatch
+        """
+        if actual_modality == preferred_modality:
+            return 1.0
+        
+        # Define modality compatibility matrix
+        # 1.0 = exact match, 0.7-0.9 = compatible, 0.3-0.6 = partial, 0.1-0.2 = stretch, 0 = incompatible
+        compatibility = {
+            # Format: (actual, preferred) -> fit_score
+            ("small_molecule", "biologic"): 0.3,
+            ("small_molecule", "peptide"): 0.6,
+            ("small_molecule", "antibody"): 0.2,
+            ("small_molecule", "oligo"): 0.5,
+            ("small_molecule", "degrader"): 0.7,
+            ("biologic", "small_molecule"): 0.3,
+            ("biologic", "antibody"): 0.9,
+            ("biologic", "peptide"): 0.8,
+            ("peptide", "small_molecule"): 0.4,
+            ("peptide", "biologic"): 0.7,
+            ("oligo", "small_molecule"): 0.3,
+            ("antibody", "biologic"): 0.9,
+        }
+        
+        return compatibility.get((actual_modality, preferred_modality), 0.1)
 
 
 # ============================================================================
