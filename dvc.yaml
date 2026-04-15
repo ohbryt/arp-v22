@@ -1,0 +1,152 @@
+# ARP v22 DVC Pipeline Configuration
+# 
+# Usage:
+#   dvc repro              # Run full pipeline
+#   dvc repro target_prioritization  # Run specific stage
+#   dvc metrics diff        # Compare metrics
+#   dvc params diff         # Compare parameters
+
+schema: schemas/dvc_schema.yaml
+
+stages:
+  ingest_chembl:
+    cmd: python -m arp_v22.ingest chembl --version 34 --output data/chembl_34.parquet
+    deps:
+      - data/raw/chembl_34.tar.gz
+    params:
+      - data_sources.chembl.version
+      - data_sources.chembl.filters.min_activity
+    outs:
+      - data/chembl_34.parquet
+    metrics:
+      - metrics/chembl_ingest.json
+    persist: true
+
+  ingest_pubchem:
+    cmd: python -m arp_v22.ingest pubchem --output data/pubchem_compounds.parquet
+    deps:
+      - data/raw/pubchem_sdf/
+    params:
+      - data_sources.pubchem.max_compounds
+    outs:
+      - data/pubchem_compounds.parquet
+    metrics:
+      - metrics/pubchem_ingest.json
+
+  ingest_uniprot:
+    cmd: python -m arp_v22.ingest uniprot --output data/uniprot_proteins.parquet
+    deps:
+      - data/raw/uniprot/
+    params:
+      - data_sources.uniprot.taxonomy
+    outs:
+      - data/uniprot_proteins.parquet
+
+  normalize_compounds:
+    cmd: python -m arp_v22.normalize compounds --input data/chembl_34.parquet --output data/normalized_compounds.parquet
+    deps:
+      - data/chembl_34.parquet
+      - schemas/compound_schema.json
+    params:
+      - normalization.standardize_smiles
+      - normalization.remove_salts
+      - normalization.pains_filters
+    outs:
+      - data/normalized_compounds.parquet
+    cache: true
+
+  target_prioritization:
+    cmd: python -m arp_v22.prioritize --disease ${disease} --targets ${targets} --output data/prioritized_targets.parquet
+    deps:
+      - data/normalized_compounds.parquet
+      - data/uniprot_proteins.parquet
+    params:
+      - disease.weights
+      - scoring.min_confidence
+    outs:
+      - data/prioritized_targets.parquet
+
+  virtual_screening:
+    cmd: python -m arp_v22.screen --targets data/prioritized_targets.parquet --library data/normalized_compounds.parquet --method ${method} --output data/screening_hits.parquet
+    deps:
+      - data/prioritized_targets.parquet
+      - data/normalized_compounds.parquet
+    params:
+      - screening.method
+      - screening.max_hits
+      - screening.confidence_threshold
+    outs:
+      - data/screening_hits.parquet
+    metrics:
+      - metrics/screening_results.json
+    persist: true
+    gpu: true  # Request GPU for docking/generation
+
+  admet_filter:
+    cmd: python -m arp_v22.filter admet --input data/screening_hits.parquet --output data/filtered_candidates.parquet
+    deps:
+      - data/screening_hits.parquet
+    params:
+      - admet.thresholds
+      - admet.waivers
+    outs:
+      - data/filtered_candidates.parquet
+
+  rank_candidates:
+    cmd: python -m arp_v22.rank --input data/filtered_candidates.parquet --output results/candidates_ranked.parquet --top-n 50
+    deps:
+      - data/filtered_candidates.parquet
+    outs:
+      - results/candidates_ranked.parquet
+      - results/evidence.jsonl
+      - results/report.md
+
+  generate_manifest:
+    cmd: python -m arp_v22.manifest --output manifest.json
+    deps:
+      - results/candidates_ranked.parquet
+      - results/evidence.jsonl
+    outs:
+      - manifest.json
+
+params:
+  data_sources:
+    chembl:
+      version: "34"
+      min_activity: "Ki<10000"
+    pubchem:
+      max_compounds: 1000000
+    uniprot:
+      taxonomy: "Homo sapiens"
+
+  normalization:
+    standardize_smiles: true
+    remove_salts: true
+    pains_filters: true
+
+  disease:
+    weights:
+      genetic_causality: 0.15
+      disease_context: 0.20
+      perturbation_rescue: 0.20
+      tissue_specificity: 0.10
+      druggability: 0.10
+      safety: 0.15
+      translation: 0.05
+      novelty: 0.05
+
+  screening:
+    method: "qsar+docking"
+    max_hits: 1000
+    confidence_threshold: 0.7
+
+  admet:
+    thresholds:
+      logp: 5.0
+      tpsa: 140
+      mw: 500
+      hba: 10
+      hbd: 5
+    waivers:
+      - "proven_efficacy"
+      - " selectivity>100x"
