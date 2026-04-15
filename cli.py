@@ -19,8 +19,9 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from core import TargetScorer, DiseaseEngine, DISEASE_WEIGHTS, Disease
+from core import TargetScorer, DiseaseEngine
 from core.schema import DiseaseType, ScoringEngineConfig
+from core.weights import DISEASE_WEIGHTS, Disease
 from disease_packs.masld import MASLDTargets, get_masld_ontology
 from disease_packs.sarcopenia import SarcopeniaTargets, get_sarcopenia_ontology
 
@@ -152,7 +153,7 @@ def show_weights(disease_name: str):
     print("=" * 60)
     print(f"\n  Dimension                  Weight")
     print(f"  " + "-" * 35)
-    print(f"  Genetic Causality          {weights.genetic_causity:.2f}")
+    print(f"  Genetic Causality          {weights.genetic_causality:.2f}")
     print(f"  Disease Context            {weights.disease_context:.2f}")
     print(f"  Perturbation Rescue        {weights.perturbation_rescue:.2f}")
     print(f"  Tissue Specificity         {weights.tissue_specificity:.2f}")

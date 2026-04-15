@@ -130,7 +130,7 @@ class ARPv22Pipeline:
         if run_engine3:
             print(f"💊 Engine 3: Generating candidates...")
             for target in targets[:5]:  # Top 5 only
-                top_modality = targets[0].recommended_modalities[0] if targets[0].recommended_modalities else "small_molecule"
+                top_modality = target.recommended_modalities[0] if target.recommended_modalities else "small_molecule"
                 candidates_result = self.engine3.generate_candidates(
                     gene_name=target.gene_name,
                     disease=disease,
@@ -235,7 +235,10 @@ class ARPv22Pipeline:
             "heart-failure": DiseaseType.HEART_FAILURE,
             "cancer": DiseaseType.CANCER,
         }
-        return mapping.get(disease.lower(), DiseaseType.MASLD)
+        normalized = disease.lower().strip()
+        if normalized not in mapping:
+            raise ValueError(f"Unsupported disease: {disease!r}. Supported: {list(mapping.keys())}")
+        return mapping[normalized]
     
     def get_literature(
         self,

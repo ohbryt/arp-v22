@@ -34,9 +34,38 @@ def load_candidates_from_parquet(filepath: str) -> List[CandidateScoreSchema]:
     try:
         import pandas as pd
         df = pd.read_parquet(filepath)
-        # Convert to CandidateScoreSchema objects
-        # This is a simplified version - actual implementation would need full mapping
-        return []
+        
+        candidates = []
+        for _, row in df.iterrows():
+            try:
+                # Build CompoundSchema from row
+                compound_data = {}
+                for field in ["compound_id", "inchi_key", "canonical_smiles"]:
+                    if field in row and pd.notna(row[field]):
+                        compound_data[field] = row[field]
+                
+                if compound_data:
+                    compound = CompoundSchema(**compound_data)
+                    
+                    # Build CandidateScoreSchema from row
+                    candidate_data = {
+                        "candidate_id": row.get("candidate_id", str(row.name)),
+                        "compound": compound,
+                        "target": row.get("target", "unknown"),
+                        "priority_score": row.get("priority_score", 0.0),
+                    }
+                    
+                    # Optional fields
+                    for opt_field in ["qsar_score", "docking_score", "dti_score", 
+                                       "admet_score", "novelty_score"]:
+                        if opt_field in row and pd.notna(row[opt_field]):
+                            candidate_data[opt_field] = row[opt_field]
+                    
+                    candidates.append(CandidateScoreSchema(**candidate_data))
+            except Exception:
+                continue
+        
+        return candidates
     except ImportError:
         print("pandas/pyarrow not installed, skipping parquet loading")
         return []
@@ -71,8 +100,7 @@ def load_candidates_from_json(filepath: str) -> List[CandidateScoreSchema]:
 
 def load_manifest(filepath: str) -> ManifestSchema:
     """Load manifest from JSON file"""
-    with open(filepath, "r") as f:
-        return ManifestSchema.from_json(filepath)
+    return ManifestSchema.from_json(filepath)
 
 
 def run_validation(run_dir: str) -> Dict[str, Any]:

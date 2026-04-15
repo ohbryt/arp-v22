@@ -200,7 +200,7 @@ def get_data_source(source: str) -> dict:
     return DATA_SOURCES.get(source.lower(), {})
 
 
-def validate_config() -> bool:
+def validate_config() -> tuple[bool, List[str]]:
     """Validate configuration"""
     errors = []
     
