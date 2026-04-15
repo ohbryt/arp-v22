@@ -377,9 +377,9 @@ class CandidateEngine:
         # Default scores based on stage and disease
         base_scores = self._get_base_scores(stage)
         
-        # Determine modality: smiles-based heuristic, but allow override
+        # Determine modality: use smarter inference if smiles provided
         # Note: In production, this should come from actual compound metadata
-        actual_modality = "small_molecule" if smiles else "biologic"
+        actual_modality = self._infer_modality(smiles)
         
         compound = CandidateCompound(
             compound_id=compound_id,
@@ -401,11 +401,59 @@ class CandidateEngine:
         else:
             compound.modality_fit_score = 1.0  # No penalty if no hint
         
-        # Set approved indications if applicable
-        if stage == "approved":
-            compound.approved_indications = [disease.replace("_", " ").title()]
+        # Set approved indications only if NOT already set (don't auto-generate)
+        # Note: Auto-generating approved_indications from disease name is dangerous
+        # It creates false metadata. Only set if provided or if explicitly known.
+        if stage == "approved" and not compound.approved_indications:
+            # Don't auto-fill - would create incorrect metadata
+            # Real implementation should query DrugBank/API for actual indications
+            pass
         
         return compound
+    
+    def _infer_modality(self, smiles: Optional[str]) -> str:
+        """
+        Infer compound modality from SMILES.
+        
+        This is a heuristic - in production, modality should come from
+        actual compound metadata (molecule_type,分子量, etc.)
+        
+        Returns:
+            Modality string: small_molecule, peptide, oligo, biologic
+        """
+        if not smiles:
+            return "biologic"
+        
+        # Calculate basic properties for inference
+        try:
+            from rdkit import Chem
+            from rdkit.Chem import Descriptors
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                return "biologic"
+            
+            mol_wt = Descriptors.MolWt(mol)
+            num_amino_acids = smiles.count('N') + smiles.count('n')  # Rough heuristic
+            
+            # Very rough heuristics for modality inference
+            # Small molecules: typically < 1000 Da
+            if mol_wt < 1500:
+                # Check for peptide-like patterns
+                if '(' in smiles and ')' in smiles and num_amino_acids > 3:
+                    return "peptide"
+                # Check for nucleotide-like patterns
+                if smiles.count('O') > 5 and 'P' in smiles:
+                    return "oligo"
+                return "small_molecule"
+            else:
+                # > 1500 Da is likely biologic (peptide, protein, antibody fragment)
+                if mol_wt > 5000:
+                    return "biologic"
+                else:
+                    return "peptide"
+        except ImportError:
+            # RDKit not available, fall back to basic heuristic
+            return "small_molecule" if smiles else "biologic"
     
     def _get_base_scores(self, stage: str) -> Dict[str, float]:
         """Get base scores based on development stage"""

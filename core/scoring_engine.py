@@ -464,7 +464,15 @@ class TargetScorer:
         
         # Use provided scores or defaults
         if score_overrides:
-            scores = TargetScores(**score_overrides)
+            # Generate default first, then merge partial overrides
+            if target_info.default_scores:
+                base_scores = target_info.default_scores
+            else:
+                base_scores = self._generate_default_scores(target_info, disease)
+            # Merge: override only provided fields, keep defaults for rest
+            scores_dict = base_scores.to_dict()
+            scores_dict.update(score_overrides)
+            scores = TargetScores(**scores_dict)
         elif target_info.default_scores:
             scores = target_info.default_scores
         else:
@@ -486,70 +494,74 @@ class TargetScorer:
         target_info: TargetInfo,
         disease: DiseaseType,
     ) -> TargetScores:
-        """Generate reasonable default scores based on target properties"""
+        """Generate PRIOR/DEFAULT scores when evidence is not available.
         
-        # Base scores that vary by disease
+        Note: These are conservative defaults (0.4-0.6) to reflect
+        uncertainty. Evidence-based scores should be higher (0.7-0.9).
+        """
+        
+        # Conservative default scores by disease
         base_scores = {
             DiseaseType.MASLD: TargetScores(
-                genetic_causality=0.70,
-                disease_context=0.85,
-                perturbation_rescue=0.80,
-                tissue_specificity=0.75 if target_info.is_liver_specific else 0.60,
-                druggability=0.85,
-                safety=0.70,
-                translation=0.75,
-                competitive_novelty=0.60,
+                genetic_causality=0.45,
+                disease_context=0.50,  # No evidence = conservative
+                perturbation_rescue=0.50,
+                tissue_specificity=0.60 if target_info.is_liver_specific else 0.40,
+                druggability=0.60,
+                safety=0.50,
+                translation=0.45,
+                competitive_novelty=0.50,
             ),
             DiseaseType.SARCOPENIA: TargetScores(
-                genetic_causality=0.60,
-                disease_context=0.80,
-                perturbation_rescue=0.85,
-                tissue_specificity=0.80 if target_info.is_liver_specific else 0.50,
-                druggability=0.75,
-                safety=0.65,
-                translation=0.70,
-                competitive_novelty=0.55,
+                genetic_causality=0.45,
+                disease_context=0.50,
+                perturbation_rescue=0.50,
+                tissue_specificity=0.60 if getattr(target_info, 'is_muscle_specific', False) else 0.40,
+                druggability=0.55,
+                safety=0.50,
+                translation=0.45,
+                competitive_novelty=0.50,
             ),
             DiseaseType.LUNG_FIBROSIS: TargetScores(
-                genetic_causality=0.55,
-                disease_context=0.85,
-                perturbation_rescue=0.80,
-                tissue_specificity=0.70,
-                druggability=0.75,
-                safety=0.65,
-                translation=0.75,
-                competitive_novelty=0.60,
+                genetic_causality=0.40,
+                disease_context=0.50,
+                perturbation_rescue=0.50,
+                tissue_specificity=0.55,
+                druggability=0.55,
+                safety=0.50,
+                translation=0.50,
+                competitive_novelty=0.50,
             ),
             DiseaseType.HEART_FAILURE: TargetScores(
-                genetic_causality=0.65,
-                disease_context=0.80,
-                perturbation_rescue=0.75,
-                tissue_specificity=0.65,
-                druggability=0.80,
-                safety=0.60,
-                translation=0.80,
+                genetic_causality=0.50,
+                disease_context=0.50,
+                perturbation_rescue=0.50,
+                tissue_specificity=0.50,
+                druggability=0.60,
+                safety=0.45,  # Safety concerns weighted
+                translation=0.55,
                 competitive_novelty=0.50,
             ),
             DiseaseType.CANCER: TargetScores(
-                genetic_causality=0.85,
-                disease_context=0.80,
-                perturbation_rescue=0.80,
-                tissue_specificity=0.40,  # Often low for cancer
-                druggability=0.80,
-                safety=0.55,
-                translation=0.75,
-                competitive_novelty=0.70,
+                genetic_causality=0.55,
+                disease_context=0.50,
+                perturbation_rescue=0.50,
+                tissue_specificity=0.35,  # Often low for cancer
+                druggability=0.60,
+                safety=0.40,  # Safety concerns high
+                translation=0.50,
+                competitive_novelty=0.55,
             ),
         }
         
         return base_scores.get(disease, TargetScores(
-            genetic_causality=0.60,
-            disease_context=0.70,
-            perturbation_rescue=0.70,
-            tissue_specificity=0.60,
-            druggability=0.70,
-            safety=0.70,
-            translation=0.60,
+            genetic_causality=0.40,
+            disease_context=0.40,
+            perturbation_rescue=0.40,
+            tissue_specificity=0.40,
+            druggability=0.50,
+            safety=0.40,
+            translation=0.40,
             competitive_novelty=0.50,
         ))
     
@@ -693,7 +705,7 @@ class DiseaseEngine:
                 is_liver_specific=target_info.is_liver_specific,
                 has_known_pocket=target_info.has_known_pocket,
                 has_degradation_logic=target_info.has_degradation_logic,
-                status=Status.PRIORITIZED if priority_score >= self.config.min_priority_score else Status.DEPrioritized,
+                status=Status.PRIORITIZED if priority_score >= self.config.min_priority_score else Status.DEPRIORITIZED,
                 created_date=date.today(),
                 last_updated=date.today(),
             )
