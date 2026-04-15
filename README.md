@@ -1,14 +1,34 @@
-# ARP v22 - Production Drug Discovery Pipeline
+# ARP v22 - Research Pipeline for Drug Discovery
 
-**Version**: 22.2.0  
-**Status**: Foundation + Data Ingest + Screening MVP  
+**Version**: 22.2.1  
+**Status**: Research-grade MVP pipeline (not production-ready)  
 **Architecture**: 3-Engine + Data Contracts + Virtual Screening
+
+---
+
+## ⚠️ Implementation Status
+
+This is a **research prototype** with production-minded architecture. Some components are implemented, others are planned:
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Engine 1: Target Prioritization | ✅ Implemented | Heuristic baseline scoring |
+| Engine 2: Modality Routing | ✅ Implemented | Rule-based routing |
+| Engine 3: Candidate Generation | ✅ Implemented | Literature compound DB |
+| JSON Schema + Validation | ✅ Implemented | CI validation gate |
+| DVC Pipeline Config | ✅ Implemented | Skeleton only |
+| Data Ingestion (ChEMBL/PubChem/UniProt) | ✅ Implemented | REST API clients |
+| QSAR Screening | ✅ Implemented | Chemprop + RDKit fallback |
+| Vina Docking | ✅ Implemented | CLI wrapper (Vina required) |
+| ADMET Filters | ⏳ Planned | PAINS placeholder only |
+| De Novo Generation | ⏳ Planned | REINVENT integration |
+| Synthesis Planning | ⏳ Planned | AiZynthFinder |
 
 ---
 
 ## Overview
 
-ARP v22 is a production-ready drug discovery pipeline with:
+ARP v22 is a research-grade drug discovery pipeline with:
 
 1. **Engine 1**: Disease → Target (target prioritization)
 2. **Engine 2**: Target → Modality (modality routing)
