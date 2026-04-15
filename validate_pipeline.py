@@ -80,22 +80,57 @@ def load_candidates_from_json(filepath: str) -> List[CandidateScoreSchema]:
             for line in f:
                 if line.strip():
                     d = json.loads(line)
+                    # Skip evidence entries (they have 'source', 'source_id', 'evidence_type' but no 'compound')
+                    if "compound" not in d:
+                        continue
                     # Convert dict to CandidateScoreSchema
-                    if "compound" in d and isinstance(d["compound"], dict):
+                    if isinstance(d.get("compound"), dict):
                         d["compound"] = CompoundSchema(**d["compound"])
-                    candidates.append(CandidateScoreSchema(**d))
+                    try:
+                        candidates.append(CandidateScoreSchema(**d))
+                    except (TypeError, KeyError) as e:
+                        warnings.append(f"Skipping invalid candidate entry: {e}")
+                        continue
     elif filepath.endswith(".json"):
         with open(filepath, "r") as f:
             data = json.load(f)
             if isinstance(data, list):
                 for item in data:
-                    if "compound" in item and isinstance(item["compound"], dict):
+                    if "compound" not in item:
+                        continue
+                    if isinstance(item.get("compound"), dict):
                         item["compound"] = CompoundSchema(**item["compound"])
-                    candidates.append(CandidateScoreSchema(**item))
-            elif isinstance(data, dict):
-                return [CandidateScoreSchema(**data)]
+                    try:
+                        candidates.append(CandidateScoreSchema(**item))
+                    except (TypeError, KeyError) as e:
+                        warnings.append(f"Skipping invalid candidate entry: {e}")
+                        continue
+            elif isinstance(data, dict) and "compound" in data:
+                if isinstance(data.get("compound"), dict):
+                    data["compound"] = CompoundSchema(**data["compound"])
+                try:
+                    return [CandidateScoreSchema(**data)]
+                except (TypeError, KeyError):
+                    pass
     
     return candidates
+
+
+def load_evidence_log(filepath: str) -> List[Dict]:
+    """Load evidence from JSONL evidence log file (not candidates!)"""
+    evidence = []
+    
+    if filepath.endswith(".jsonl"):
+        with open(filepath, "r") as f:
+            for line in f:
+                if line.strip():
+                    d = json.loads(line)
+                    # Evidence logs typically have: source, source_id, evidence_type
+                    # vs candidates which have: compound, target, priority_score
+                    if "source" in d and "evidence_type" in d:
+                        evidence.append(d)
+    
+    return evidence
 
 
 def load_manifest(filepath: str) -> ManifestSchema:
@@ -135,15 +170,18 @@ def run_validation(run_dir: str) -> Dict[str, Any]:
             errors.append(f"Failed to load manifest: {e}")
             manifest = None
     
-    # Check candidates
+    # Check candidates (in priority order)
     candidates_path = run_path / "candidates.parquet"
     candidates_json_path = run_path / "candidates.json"
-    candidates_jsonl_path = run_path / "evidence.jsonl"
+    candidates_jsonl_path = run_path / "candidates.jsonl"
+    evidence_jsonl_path = run_path / "evidence.jsonl"
     
     candidates = []
     
+    # Note: evidence.jsonl is evidence logs, NOT candidates
+    # Candidates should be in candidates.parquet, candidates.json, or candidates.jsonl
     if candidates_jsonl_path.exists():
-        print("📋 Loading candidates from evidence.jsonl...")
+        print("📋 Loading candidates from candidates.jsonl...")
         candidates = load_candidates_from_json(str(candidates_jsonl_path))
         print(f"   Loaded {len(candidates)} candidates")
     elif candidates_json_path.exists():
@@ -154,9 +192,18 @@ def run_validation(run_dir: str) -> Dict[str, Any]:
         print("📋 Loading candidates from candidates.parquet...")
         candidates = load_candidates_from_parquet(str(candidates_path))
         print(f"   Loaded {len(candidates)} candidates")
+    elif evidence_jsonl_path.exists():
+        warnings.append("Found evidence.jsonl but no candidates file - evidence logs are not candidates")
+        print("   ⚠️ Found evidence.jsonl but no candidates file")
     else:
         warnings.append("No candidates file found")
         print("   ⚠️ No candidates file found")
+    
+    # Check evidence log separately (if it exists)
+    if evidence_jsonl_path.exists():
+        print("📋 Loading evidence log (for reference)...")
+        evidence = load_evidence_log(str(evidence_jsonl_path))
+        print(f"   Found {len(evidence)} evidence entries")
     
     # Validate candidates
     if candidates:

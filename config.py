@@ -2,10 +2,14 @@
 ARP v22 - Configuration File
 
 This file defines all configurable parameters for the pipeline.
-Override values using environment variables or by creating a config_local.py.
+Override values using:
+1. Environment variables (NCBI_API_KEY, SCOPUS_API_KEY, etc.)
+2. Create a config_local.py with overrides (optional)
 """
 
+import os
 from pathlib import Path
+from typing import Dict, Any, List, Tuple
 
 # ============================================================================
 # PATHS
@@ -95,11 +99,17 @@ ADMET_THRESHOLDS = {
     "fraction_csp3": {"min": 0.25, "unit": "ratio"},
 }
 
-# PAINS filter patterns (RDKit format)
+# PAINS filter patterns - PLACEHOLDER (see RDKit FilterCatalog for real implementation)
+# Usage: Install rdkit and use FilterCatalog with PAINS terms
+# https://rdkit.org/docs/source/rdkit.Chem.rdfiltercatalog.html
 PAINS_FILTERS = {
     "pains_a": r"(?i)\[.*\:(?:\w{1,3}\?)+\].*\#.*\=",
     "pains_b": r"c1ccnc1\C=C/c.*c.*\n",
-    # ... full PAINS patterns would be much longer
+    # TODO: Replace with RDKit FilterCatalog PAINS terms
+    # PAINS (Pan-Assay Interference Compounds) are frequent hitters
+    # that show activity across many assays without being true binders.
+    # Real implementation requires full PAINS list from:
+    # https://www.gdbtools.unibe.ch/downloads/patterns/pains_patterns.txt
 }
 
 
@@ -177,13 +187,29 @@ MANIFEST = {
 # API KEYS (from environment)
 # ============================================================================
 
-import os
-
 API_KEYS = {
     "ncbi_api_key": os.environ.get("NCBI_API_KEY", ""),
     "scopus_api_key": os.environ.get("SCOPUS_API_KEY", ""),
     "brave_api_key": os.environ.get("BRAVE_API_KEY", ""),
 }
+
+
+# ============================================================================
+# CONFIG LOCAL OVERRIDES
+# ============================================================================
+# Load config_local.py if it exists to allow local overrides
+# Usage: Create config_local.py in the same directory with overrides
+# Example:
+#   from config import *
+#   DATA_DIR = Path("/custom/data/path")
+#   API_KEYS["ncbi_api_key"] = "your-key-here"
+
+_CONFIG_LOCAL_LOADED = False
+try:
+    from .config_local import *
+    _CONFIG_LOCAL_LOADED = True
+except ImportError:
+    pass
 
 
 # ============================================================================
@@ -200,7 +226,7 @@ def get_data_source(source: str) -> dict:
     return DATA_SOURCES.get(source.lower(), {})
 
 
-def validate_config() -> tuple[bool, List[str]]:
+def validate_config() -> Tuple[bool, List[str]]:
     """Validate configuration"""
     errors = []
     
@@ -214,3 +240,18 @@ def validate_config() -> tuple[bool, List[str]]:
         errors.append("NCBI API key not set (NCBI_API_KEY)")
     
     return len(errors) == 0, errors
+
+
+def get_config_summary() -> Dict[str, Any]:
+    """Get a summary of current configuration (for debugging)"""
+    return {
+        "config_local_loaded": _CONFIG_LOCAL_LOADED,
+        "data_dir": str(DATA_DIR),
+        "models_dir": str(MODELS_DIR),
+        "results_dir": str(RESULTS_DIR),
+        "api_keys_configured": {
+            k: bool(v) for k, v in API_KEYS.items()
+        },
+        "screening_method": SCREENING.get("method"),
+        "pains_filters_count": len(PAINS_FILTERS),
+    }
