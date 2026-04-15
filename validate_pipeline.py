@@ -276,6 +276,80 @@ def run_validation(run_dir: str) -> Dict[str, Any]:
     return {"valid": True, "errors": [], "warnings": []}
 
 
+def validate_direct_files(candidates_path: str, manifest_path: str) -> Dict[str, Any]:
+    """Validate directly specified candidates and manifest files"""
+    print(f"\n{'='*60}")
+    print(f"DIRECT FILE VALIDATION")
+    print(f"{'='*60}\n")
+    
+    errors = []
+    warnings = []
+    
+    # Load manifest
+    print("📋 Loading manifest...")
+    try:
+        manifest = load_manifest(manifest_path)
+        manifest_valid, manifest_errors = validate_manifest(manifest)
+        if manifest_valid:
+            print(f"   ✅ Manifest valid: {manifest.run_id}")
+        else:
+            errors.extend([f"Manifest: {e}" for e in manifest_errors])
+            print(f"   ❌ Manifest errors: {len(manifest_errors)}")
+    except Exception as e:
+        errors.append(f"Failed to load manifest: {e}")
+        manifest = None
+    
+    # Load candidates based on file extension
+    candidates = []
+    if candidates_path.endswith(".parquet"):
+        print("📋 Loading candidates from parquet...")
+        candidates = load_candidates_from_parquet(candidates_path)
+    elif candidates_path.endswith(".jsonl"):
+        print("📋 Loading candidates from JSONL...")
+        candidates = load_candidates_from_json(candidates_path)
+    elif candidates_path.endswith(".json"):
+        print("📋 Loading candidates from JSON...")
+        candidates = load_candidates_from_json(candidates_path)
+    else:
+        errors.append(f"Unsupported candidates file format: {candidates_path}")
+    
+    if candidates:
+        print(f"   Loaded {len(candidates)} candidates")
+        
+        # Validate each candidate
+        candidate_errors = []
+        for i, candidate in enumerate(candidates):
+            valid, errs = validate_candidate(candidate)
+            if not valid:
+                candidate_errors.extend([f"Candidate {i}: {e}" for e in errs])
+        
+        if candidate_errors:
+            errors.extend(candidate_errors)
+            print(f"   ❌ {len(candidate_errors)} validation errors")
+        else:
+            print(f"   ✅ All candidates valid")
+    else:
+        if not errors:
+            warnings.append("No candidates loaded")
+    
+    # Print summary
+    if errors:
+        print(f"\n❌ VALIDATION FAILED ({len(errors)} errors)")
+        for e in errors[:10]:
+            print(f"   ERROR: {e}")
+        if len(errors) > 10:
+            print(f"   ... and {len(errors) - 10} more")
+        return {"valid": False, "errors": errors, "warnings": warnings}
+    elif warnings:
+        print(f"\n⚠️  VALIDATION PASSED WITH WARNINGS")
+        for w in warnings:
+            print(f"   WARNING: {w}")
+        return {"valid": True, "errors": [], "warnings": warnings}
+    else:
+        print(f"\n✅ VALIDATION PASSED")
+        return {"valid": True, "errors": [], "warnings": []}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Validate ARP v22 pipeline outputs")
     parser.add_argument("--run-dir", help="Pipeline run directory")
@@ -288,8 +362,7 @@ def main():
     if args.run_dir:
         result = run_validation(args.run_dir)
     elif args.candidates and args.manifest:
-        print("Direct file validation not yet implemented")
-        sys.exit(1)
+        result = validate_direct_files(args.candidates, args.manifest)
     else:
         parser.print_help()
         sys.exit(1)

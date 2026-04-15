@@ -156,6 +156,23 @@ class CandidateRankingResult:
 # ============================================================================
 # KNOWN COMPOUNDS DATABASE
 # ============================================================================
+#
+# IMPORTANT: This database contains target->compound mappings.
+# Keys should be GENES (gene symbols) when possible.
+#
+# Known issues:
+# - ARNI is a drug CLASS (Sacubitril/Valsartan combination), not a gene.
+#   It's included here because it represents a therapeutic concept.
+#   In production, this should be in a separate "regimen" or "therapy_class" section.
+#
+# Ontology principles:
+# - gene symbols: THRB, NR1H4, PPARA, EGFR, etc.
+# - drug classes: ARNI (combination therapy)
+# - protein complexes: PD-L1 (actually gene CD274)
+#
+# When adding entries, prefer actual gene targets. Use drug classes sparingly
+# and mark them with a comment.
+#
 
 # MASLD known compounds
 MASLD_COMPOUNDS = {
