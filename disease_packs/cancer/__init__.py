@@ -12,10 +12,15 @@ Key principles:
 
 from .ontology import CancerOntology, get_cancer_ontology
 from .targets import CancerTargets, CANCER_TARGETS
+from .pdac_targets import PDACTargets, PDAC_TARGETS, get_pdac_summary
 
 __all__ = [
     "CancerOntology",
     "get_cancer_ontology",
     "CancerTargets",
     "CANCER_TARGETS",
+    # PDAC-specific
+    "PDACTargets",
+    "PDAC_TARGETS",
+    "get_pdac_summary",
 ]
